@@ -1,0 +1,60 @@
+
+# .github/workflows/deploy.yml
+# uses GitHub’s official Pages actions (configure-pages, upload-pages-artifact, deploy-pages)
+# runs the build inside an Alpine container to minimize the environment that executes your commands.
+# Before you start: In Settings → Pages, set Source to GitHub Actions
+
+name: Deploy mdBook to GitHub Pages
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# Harden GITHUB_TOKEN by default; elevate per job
+permissions:
+  contents: read
+  pages: write      # needed for deploy-pages
+  id-token: write   # needed for deployment status
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # if needed, can pin to a specific image (avoid -latest drift)
+    container:
+      image: alpine:latest  # small userland for build steps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4  # pin to a release tag or SHA
+
+      - name: Install mdBook (static binary)
+        run: |
+          apk add --no-cache curl tar
+          # Pin mdBook version explicitly to avoid "latest" drift
+          MDBOOK_VERSION=0.5.2
+          curl -sSL -o mdbook.tgz \
+            "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          tar -xzf mdbook.tgz
+          mv mdbook /usr/local/bin/
+
+      - name: Build Book
+        run: mdbook build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5  # pin to version/commit
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './book'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+``
